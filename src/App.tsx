@@ -13,6 +13,10 @@ export const padTimeUnit = (value: number) => {
   return value <= 9 ? '0' + value : value;
 };
 
+export function lerp(start, end, amt) {
+  return (1 - amt) * start + amt * end;
+}
+
 export type WorkingHours = {
   id: string;
   startsAt: Date;
@@ -138,25 +142,40 @@ export const Scheduler = () => {
     const rect = containerRef.current.getBoundingClientRect();
     setBbox({ x: rect.x, y: rect.y, w: rect.width, h: rect.height });
   }, [containerRef]);
+
+  const [scrollTarget, setScrollTarget] = React.useState(null);
   React.useEffect(() => {
-    if (mouseClientPos.y > bbox.y + bbox.h * 0.9) {
-      setMouseOffset({ ...mouseOffset, y: mouseOffset.y - 30 });
-      containerRef.current.scrollBy(0, 30);
-    } else if (mouseClientPos.y < bbox.y + bbox.h * 0.1) {
-      setMouseOffset({ ...mouseOffset, y: mouseOffset.y + 30 });
-      containerRef.current.scrollBy(0, -30);
+    if (scrollTarget !== null) {
+      containerRef.current.scrollTo(
+        containerRef.current.scrollLeft,
+        lerp(containerRef.current.scrollTop, scrollTarget, 0.5)
+      );
+      if (Math.abs(containerRef.current.scrollTop - scrollTarget) < 1) {
+        setScrollTarget(null);
+      }
     }
     if (isDragging) {
+      if (mouseClientPos.y > bbox.y + bbox.h * 0.9) {
+        setMouseOffset({ ...mouseOffset, y: mouseOffset.y - 20 });
+        containerRef.current.scrollBy(0, 20);
+      } else if (mouseClientPos.y < bbox.y + bbox.h * 0.1) {
+        setMouseOffset({ ...mouseOffset, y: mouseOffset.y + 20 });
+        containerRef.current.scrollBy(0, -20);
+      }
       const pos = {
         x: mousePagePos.x - mouseOffset.x,
         y: mousePagePos.y - mouseOffset.y,
       } as Vec2;
       drag(pos);
-      setTimeout(() => {
-        setTicks(ticks + 1);
-      }, 20);
     }
+    setTimeout(() => {
+      setTicks(ticks + 1);
+    }, 16);
   }, [ticks]);
+
+  const smoothlyScrollBy = (y: number) => {
+    setScrollTarget(containerRef.current.scrollTop + y);
+  };
 
   const [fromDate, setFromDate] = React.useState(new Date(2023, 5, 14));
   const [toDate, setToDate] = React.useState(new Date(2023, 5, 16));
@@ -178,12 +197,37 @@ export const Scheduler = () => {
     containerRef.current.scrollTo(0, 32);
   }, [containerRef]);
 
+  const [scrolledDays, setScrolledDays] = React.useState(0);
+
+  const ONE_DAY_MS = 86400 * 1000;
+
+  const scrolledDate = React.useMemo(() => {
+    return new Date(fromDate.getTime() + scrolledDays * ONE_DAY_MS);
+  }, [scrolledDays, fromDate]);
+
+  const monthNames = [
+    'янв',
+    'фев',
+    'мар',
+    'апр',
+    'мая',
+    'июн',
+    'июл',
+    'авг',
+    'сен',
+    'окт',
+    'ноя',
+    'дек',
+  ];
+
   return (
     <div
       style={{
         position: 'relative',
         width: '100%',
-        height: '600px',
+        height: '100vh',
+        userSelect: 'none',
+        fontFamily: 'sans-serif',
       }}
     >
       <div
@@ -193,8 +237,6 @@ export const Scheduler = () => {
           backgroundColor: '#efefef',
           position: 'relative',
           overflow: 'scroll',
-          fontFamily: 'sans-serif',
-          userSelect: 'none',
         }}
         ref={containerRef}
         onPointerMove={(event) => {
@@ -216,9 +258,12 @@ export const Scheduler = () => {
           }
         }}
         onScroll={(event) => {
-          if (event.currentTarget.scrollTop < 32) {
+          if (event.currentTarget.scrollTop < 100) {
             setFromDate(new Date(fromDate.getTime() - 86400 * 1000));
-            event.currentTarget.scrollBy(0, 24 * 4 * 32);
+            const scrollBy = 24 * 4 * 32;
+            setMouseOffset({ ...mouseOffset, y: mouseOffset.y - scrollBy });
+            event.currentTarget.scrollBy(0, scrollBy);
+            setScrollTarget(null);
           }
           if (
             event.currentTarget.scrollTop + event.currentTarget.offsetHeight >
@@ -226,6 +271,12 @@ export const Scheduler = () => {
           ) {
             setToDate(new Date(toDate.getTime() + 86400 * 1000));
           }
+          setScrolledDays(
+            (event.currentTarget.scrollTop + event.currentTarget.offsetHeight) /
+              24 /
+              4 /
+              32
+          );
         }}
       >
         <div>
@@ -394,11 +445,42 @@ export const Scheduler = () => {
           transform: 'translate(-50%)',
           left: '50%',
           borderRadius: '40px',
-          fontFamily: 'sans-serif',
-          boxShadow: '0 12px 12px rgba(0, 0, 0, 0.1)',
+          boxShadow:
+            '0 12px 12px rgba(0, 0, 0, 0.075), 0 0 6px rgba(0, 0, 0, 0.1)',
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        12 сен
+        <i
+          className="fa fa-chevron-up"
+          onClick={() => {
+            smoothlyScrollBy(-24 * 4 * 32);
+          }}
+        ></i>
+        <div
+          style={{
+            color: 'white',
+            backgroundColor: '#ff4f38',
+            borderRadius: '100%',
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: '500',
+          }}
+        >
+          {scrolledDate.getDate()}
+        </div>
+        {monthNames[scrolledDate.getMonth()]}
+        <i
+          className="fa fa-chevron-down"
+          onClick={() => {
+            smoothlyScrollBy(24 * 4 * 32);
+          }}
+        ></i>
       </div>
     </div>
   );
