@@ -24,12 +24,18 @@ export type WorkingHours = {
   daysOfWeek: number[];
 };
 
+export type Unit = {
+  id: string;
+  name: string;
+};
+
 export type Booking = {
   id: string;
   startsAt: Date;
   endsAt: Date;
   text: string;
   color?: string;
+  unitId: string;
 };
 
 export type Vec2 = {
@@ -45,7 +51,33 @@ export type Box = {
 };
 
 export const Scheduler = () => {
-  const numUnits = 8;
+  const units = [
+    {
+      id: '0',
+      name: 'Стол №1',
+    },
+    {
+      id: '1',
+      name: 'Стол №2',
+    },
+    {
+      id: '2',
+      name: 'Стол №3',
+    },
+    {
+      id: '3',
+      name: 'Стол №4',
+    },
+    {
+      id: '4',
+      name: 'Стол №5',
+    },
+    {
+      id: '5',
+      name: 'Стол №6',
+    },
+  ];
+  const numUnits = units.length;
   const unitWidth = 140;
   const [bookings, setBookings] = React.useState<Booking[]>([
     {
@@ -53,6 +85,7 @@ export const Scheduler = () => {
       startsAt: new Date(2023, 5, 14, 3, 0),
       endsAt: new Date(2023, 5, 14, 4, 45),
       text: 'Екатерина Ермолова +79502712235',
+      unitId: '0',
     },
     {
       id: '1',
@@ -60,12 +93,14 @@ export const Scheduler = () => {
       endsAt: new Date(2023, 5, 14, 1, 45),
       text: 'Дмитрий Козичев +79516776534',
       color: '#FF8965',
+      unitId: '1',
     },
     {
       id: '2',
       startsAt: new Date(2023, 5, 14, 22, 0),
       endsAt: new Date(2023, 5, 14, 23, 0),
       text: 'Дмитрий Козичев +79516776534',
+      unitId: '0',
     },
   ]);
   const [workingHours, setWorkingHours] = React.useState<WorkingHours[]>([
@@ -94,15 +129,26 @@ export const Scheduler = () => {
   });
 
   const drag = (pos: Vec2) => {
+    const unitI = Math.min(
+      numUnits - 1,
+      Math.max(
+        0,
+        Math.floor(
+          (pos.x + mouseOffset.x + containerRef.current.scrollLeft - 54) /
+            unitWidth
+        )
+      )
+    );
+    const unitId = units[unitI].id;
     const index = indexOffset + Math.floor(pos.y / 32 + 0.5);
     const hour = Math.floor(Math.max(0, index / 4));
     const minute = index < 0 ? 0 : (index % 4) * 15;
     const startsAt = new Date(
       minute * 60 * 1000 + hour * 3600 * 1000 + fromDate.getTime()
     );
-    const booking = bookings.filter(
-      (booking) => booking.id === dragBookingId
-    )[0];
+    // const booking = bookings.filter(
+    //   (booking) => booking.id === dragBookingId
+    // )[0];
     // const endsAt = new Date(
     //   booking.endsAt.getTime() - booking.startsAt.getTime() + startsAt.getTime()
     // );
@@ -120,6 +166,7 @@ export const Scheduler = () => {
         if (booking.id === dragBookingId) {
           return {
             ...booking,
+            unitId: unitId,
             startsAt: isResizing ? booking.startsAt : startsAt,
             endsAt: isResizing
               ? endsAt
@@ -155,13 +202,22 @@ export const Scheduler = () => {
       }
     }
     if (isDragging) {
+      let newMouseOffset = mouseOffset;
       if (mouseClientPos.y > bbox.y + bbox.h * 0.9) {
-        setMouseOffset({ ...mouseOffset, y: mouseOffset.y - 20 });
+        newMouseOffset.y -= 20;
         containerRef.current.scrollBy(0, 20);
       } else if (mouseClientPos.y < bbox.y + bbox.h * 0.1) {
-        setMouseOffset({ ...mouseOffset, y: mouseOffset.y + 20 });
+        newMouseOffset.y += 20;
         containerRef.current.scrollBy(0, -20);
       }
+      if (mouseClientPos.x < bbox.x + bbox.w * 0.1) {
+        newMouseOffset.x += 20;
+        containerRef.current.scrollBy(-20, 0);
+      } else if (mouseClientPos.x > bbox.y + bbox.w * 0.9) {
+        newMouseOffset.x -= 20;
+        containerRef.current.scrollBy(20, 0);
+      }
+      setMouseOffset(newMouseOffset);
       const pos = {
         x: mousePagePos.x - mouseOffset.x,
         y: mousePagePos.y - mouseOffset.y,
@@ -375,6 +431,9 @@ export const Scheduler = () => {
             .map((booking) => {
               const startI = dateToIndex(booking.startsAt);
               const durationI = dateToIndex(booking.endsAt) - startI;
+              const unitI = units.indexOf(
+                units.filter((unit) => unit.id === booking.unitId)[0]
+              );
               return (
                 <div
                   key={booking.id}
@@ -384,7 +443,7 @@ export const Scheduler = () => {
                     backgroundColor: booking.color ? booking.color : '#20C2F7',
                     position: 'absolute',
                     top: `${(startI + 1) * 32}px`,
-                    left: '54px',
+                    left: `${54 + unitWidth * unitI}px`,
                     borderRadius: '12px',
                     padding: '6px',
                     boxSizing: 'border-box',
